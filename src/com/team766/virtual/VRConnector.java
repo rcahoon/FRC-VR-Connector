@@ -1,0 +1,88 @@
+package com.team766.virtual;
+
+import java.io.IOException;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.channels.DatagramChannel;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+
+public class VRConnector {
+	// Command indexes
+	public static final int LEFT_MOTOR = 0;
+	public static final int RIGHT_MOTOR = 1;
+	public static final int INTAKE = 2;
+	public static final int LAUNCH = 3;
+	
+	// Feedback indexes
+	public static final int LEFT_ENCODER = 0;
+	public static final int RIGHT_ENCODER = 1;
+	public static final int HEADING = 2;
+	public static final int INTAKE_STATE = 3;
+	public static final int BALL_PRESENCE = 4;
+	
+	
+	private static final int commandsPort = 7661;
+	private static final int feedbackPort = 7662;
+	private static final int BUF_SZ = 1024;
+	
+	Selector selector;
+	InetSocketAddress sendAddr;
+	ByteBuffer feedback = ByteBuffer.allocate(BUF_SZ);
+	ByteBuffer commands = ByteBuffer.allocate(BUF_SZ);
+	
+	public int getFeedback(int index) {
+		return feedback.getInt(index*4);
+	}
+	
+	public void putCommand(int index, int value) {
+		commands.putInt(index*4, value);
+	}
+	
+	public void putCommandFloat(int index, float value) {
+		putCommand(index, (int)(value * 512.0f));
+	}
+	
+	public void putCommandBool(int index, boolean value) {
+		putCommand(index, value ? -512 : 511);
+	}
+	
+	public VRConnector(int numCommands) throws IOException {
+		selector = Selector.open();
+        DatagramChannel channel = DatagramChannel.open();
+        InetSocketAddress receiveAddr = new InetSocketAddress(feedbackPort);
+        channel.bind(receiveAddr);
+        sendAddr = new InetSocketAddress(InetAddress.getLoopbackAddress(), commandsPort);
+        channel.connect(sendAddr);
+        channel.configureBlocking(false);
+        channel.register(selector, SelectionKey.OP_READ);
+        commands.limit(numCommands*4);
+        commands.order(ByteOrder.LITTLE_ENDIAN);
+        feedback.order(ByteOrder.LITTLE_ENDIAN);
+	}
+	
+	public boolean process() throws IOException {
+		selector.selectedKeys().clear();
+		selector.selectNow();
+		boolean newData = false;
+        for (SelectionKey key : selector.selectedKeys()) {
+            if (!key.isValid()) {
+              continue;
+            }
+
+            DatagramChannel chan = (DatagramChannel)key.channel();
+            if (key.isReadable()) {
+            	feedback.clear();
+                chan.receive(feedback);
+                newData = true;
+                key.interestOps(SelectionKey.OP_WRITE);
+            } else if (key.isWritable()) {
+                chan.send(commands.duplicate(), sendAddr);
+                key.interestOps(SelectionKey.OP_READ);
+            }
+        }
+        return newData;
+	}
+}
