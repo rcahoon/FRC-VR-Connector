@@ -11,18 +11,21 @@ import java.nio.channels.Selector;
 
 public class VRConnector {
 	// Command indexes
-	public static final int LEFT_MOTOR = 0;
-	public static final int RIGHT_MOTOR = 1;
-	public static final int INTAKE = 2;
-	public static final int LAUNCH = 3;
+	public static final int RESET_SIM = 0;
+	
+	public static final int LEFT_MOTOR = 10;
+	public static final int RIGHT_MOTOR = 11;
+	public static final int INTAKE = 12;
+	public static final int LAUNCH = 13;
+	
+	private static final int MAX_COMMANDS = 64;
 	
 	// Feedback indexes
-	public static final int LEFT_ENCODER = 0;
-	public static final int RIGHT_ENCODER = 1;
-	public static final int HEADING = 2;
-	public static final int INTAKE_STATE = 3;
-	public static final int BALL_PRESENCE = 4;
-	
+	public static final int LEFT_ENCODER = 10;
+	public static final int RIGHT_ENCODER = 11;
+	public static final int HEADING = 12;
+	public static final int INTAKE_STATE = 13;
+	public static final int BALL_PRESENCE = 14;
 	
 	private static final int commandsPort = 7661;
 	private static final int feedbackPort = 7662;
@@ -46,43 +49,43 @@ public class VRConnector {
 	}
 	
 	public void putCommandBool(int index, boolean value) {
-		putCommand(index, value ? -512 : 511);
+		putCommand(index, value ? 511 : -512);
 	}
 	
-	public VRConnector(int numCommands) throws IOException {
+	public VRConnector() throws IOException {
 		selector = Selector.open();
-        DatagramChannel channel = DatagramChannel.open();
-        InetSocketAddress receiveAddr = new InetSocketAddress(feedbackPort);
-        channel.bind(receiveAddr);
-        sendAddr = new InetSocketAddress(InetAddress.getLoopbackAddress(), commandsPort);
-        channel.connect(sendAddr);
-        channel.configureBlocking(false);
-        channel.register(selector, SelectionKey.OP_READ);
-        commands.limit(numCommands*4);
-        commands.order(ByteOrder.LITTLE_ENDIAN);
-        feedback.order(ByteOrder.LITTLE_ENDIAN);
+		DatagramChannel channel = DatagramChannel.open();
+		InetSocketAddress receiveAddr = new InetSocketAddress(feedbackPort);
+		channel.bind(receiveAddr);
+		sendAddr = new InetSocketAddress(InetAddress.getLoopbackAddress(), commandsPort);
+		channel.configureBlocking(false);
+		channel.register(selector, SelectionKey.OP_READ);
+		commands.limit(MAX_COMMANDS*4);
+		commands.order(ByteOrder.LITTLE_ENDIAN);
+		feedback.order(ByteOrder.LITTLE_ENDIAN);
 	}
 	
 	public boolean process() throws IOException {
 		selector.selectedKeys().clear();
 		selector.selectNow();
 		boolean newData = false;
-        for (SelectionKey key : selector.selectedKeys()) {
-            if (!key.isValid()) {
-              continue;
-            }
+		for (SelectionKey key : selector.selectedKeys()) {
+			if (!key.isValid()) {
+				continue;
+			}
 
-            DatagramChannel chan = (DatagramChannel)key.channel();
-            if (key.isReadable()) {
-            	feedback.clear();
-                chan.receive(feedback);
-                newData = true;
-                key.interestOps(SelectionKey.OP_WRITE);
-            } else if (key.isWritable()) {
-                chan.send(commands.duplicate(), sendAddr);
-                key.interestOps(SelectionKey.OP_READ);
-            }
-        }
-        return newData;
+			DatagramChannel chan = (DatagramChannel)key.channel();
+			if (key.isReadable()) {
+				feedback.clear();
+				chan.receive(feedback);
+				newData = true;
+				key.interestOps(SelectionKey.OP_WRITE);
+			} else if (key.isWritable()) {
+				chan.send(commands.duplicate(), sendAddr);
+				putCommand(RESET_SIM, 0);
+				key.interestOps(SelectionKey.OP_READ);
+			}
+		}
+		return newData;
 	}
 }

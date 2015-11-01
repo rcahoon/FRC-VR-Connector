@@ -7,7 +7,16 @@ import com.team766.virtual.VRConnector;
 public class TestMain {
 	public static void main(String[] args) {
 		try {
-			VRConnector vrc = new VRConnector(4);
+			VRConnector vrc = new VRConnector();
+			for (int i = 0; i < 10; ++i) {
+				vrc.putCommandBool(VRConnector.RESET_SIM, true);
+				vrc.process();
+				try {
+					Thread.sleep(100);
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
 			while (true) {
 				vrc.putCommand(VRConnector.LEFT_MOTOR, 256);
 				vrc.putCommand(VRConnector.RIGHT_MOTOR, 512);
