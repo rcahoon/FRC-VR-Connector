@@ -36,11 +36,11 @@ public class VRConnector {
 	ByteBuffer feedback = ByteBuffer.allocate(BUF_SZ);
 	ByteBuffer commands = ByteBuffer.allocate(BUF_SZ);
 	
-	public int getFeedback(int index) {
+	public synchronized int getFeedback(int index) {
 		return feedback.getInt(index*4);
 	}
 	
-	public void putCommand(int index, int value) {
+	public synchronized void putCommand(int index, int value) {
 		commands.putInt(index*4, value);
 	}
 	
@@ -65,7 +65,7 @@ public class VRConnector {
 		feedback.order(ByteOrder.LITTLE_ENDIAN);
 	}
 	
-	public boolean process() throws IOException {
+	public synchronized boolean process() throws IOException {
 		selector.selectedKeys().clear();
 		selector.selectNow();
 		boolean newData = false;
